@@ -40,7 +40,7 @@ double get_elapsed_time() {
 void log_event(const char *fmt, ...) {
     double elapsed = get_elapsed_time();
 
-    printf("[Clock : %.2f] ", elapsed);
+    printf("[Clock : %.4f] ", elapsed);
     
     va_list args;
     va_start(args, fmt);
@@ -123,34 +123,41 @@ void* car_generator_thread(void *arg) {
     while (simulation_running)
     {
         if(ferry_available){
-        pthread_t tid;
+            pthread_t tid;
 
-        // Allocating memory for car IDs
-        int *car_id = malloc(sizeof(int));
-        if (car_id == NULL)
-        {
-            perror("malloc");
-            continue;
-        }
-        *car_id = next_car_id++;
+            // Allocating memory for car IDs
+            int *car_id = malloc(sizeof(int));
+            if (car_id == NULL)
+            {
+                perror("malloc");
+                continue;
+            }
+            *car_id = next_car_id++;
 
-        // Create car thread
-        int car = pthread_create(&tid, NULL, car_thread, car_id);
-        if (car != 0)
-        {
-            perror("pthread_create");
-            continue;
-        }
+            // Create car thread
+            int car = pthread_create(&tid, NULL, car_thread, car_id);
+            if (car != 0)
+            {
+                perror("pthread_create");
+                continue;
+            }
 
-        // Random arrival time between 0.1 to 1 seconds
-        usleep((rand() % 1000) * 1000);
+            // Random arrival time between 0.1 to 1 seconds
+            usleep((rand() % 1000) * 1000);
 
-        car = pthread_detach(tid);
-        if (car != 0)
-        {
-            perror("pthread_detach");
-            continue;
-        }
+            double elapsed = get_elapsed_time();
+            if (elapsed >= SIMULATION_TIME)
+            {
+                break;
+            }
+    
+            // Detach car thread
+            car = pthread_detach(tid);
+            if (car != 0)
+            {
+                perror("pthread_detach");
+                continue;
+            }
         }   
     }
     pthread_exit(NULL);
@@ -188,6 +195,13 @@ void* ferry_thread(void *arg) {
         ferry_available = false;
 
         sleep(3); // Simulate crossing time
+
+        double elapsed = get_elapsed_time();
+        if (elapsed >= SIMULATION_TIME)
+        {
+            simulation_running = false;
+            break;
+        }
 
         log_event("Ferry arrives to new dock");
 
