@@ -97,7 +97,7 @@ void* car_thread(void *arg) {
         perror("pthread_mutex_lock");
         pthread_exit(NULL);
     }
-    log_event("Car %d exited the ferry", id);
+    log_event("Car %d left the ferry", id);
     cars_on_board--;
 
     if (cars_on_board == 0) {
