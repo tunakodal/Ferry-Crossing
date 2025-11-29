@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #define FERRY_CAPACITY 5 // number of cars the ferry can hold
 #define SIMULATION_TIME 60 // seconds
@@ -20,6 +21,7 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; // mutex for critical section
 int cars_on_board = 0; 
 bool ferry_available = true; // when ferry is at the dock (not crossing or not unboarding)
 bool simulation_running = true;
+int next_car_id = 1; // to assign unique IDs to cars
 
 struct timeval start_time;
 
@@ -37,7 +39,9 @@ double get_elapsed_time() {
 
 void log_event(const char *fmt, ...) {
     double elapsed = get_elapsed_time();
+
     printf("[Clock : %.2f] ", elapsed);
+    
     va_list args;
     va_start(args, fmt);
     vprintf(fmt, args);
@@ -50,13 +54,11 @@ void* car_thread(void *arg) {
     free(arg);
 
     // Wait for ferry to be available i.e. get ticket
-    if (sem_wait(sem_board) != 0)
+    if (sem_wait(&sem_board) != 0)
     {
         perror("sem_wait(sem_board)");
         pthread_exit(NULL);
     }
-
-    log_event("Car %d entered the ferry", id);
 
     // Critical section to update cars_on_board + signal the ferry if full (if needed)
     if (pthread_mutex_lock(&mutex) != 0)
@@ -64,10 +66,11 @@ void* car_thread(void *arg) {
         perror("pthread_mutex_lock");
         pthread_exit(NULL);
     }
+    log_event("Car %d entered the ferry", id);
     cars_on_board++;
 
     if (cars_on_board == FERRY_CAPACITY) {
-        if (sem_post(sem_full) != 0)
+        if (sem_post(&sem_full) != 0)
         {
             perror("sem_post(sem_full)");
             pthread_mutex_unlock(&mutex);
@@ -81,13 +84,12 @@ void* car_thread(void *arg) {
         pthread_exit(NULL);
     }
 
-    if (sem_wait(sem_unboard) != 0)
+    if (sem_wait(&sem_unboard) != 0)
     {
         perror("sem_wait(sem_unboard)");
         pthread_exit(NULL);
     }
 
-    log_event("Car %d exited the ferry", id);
 
     // Critical section to update cars_on_board + signal the ferry if empty (if needed)
     if (pthread_mutex_lock(&mutex) != 0)
@@ -95,10 +97,11 @@ void* car_thread(void *arg) {
         perror("pthread_mutex_lock");
         pthread_exit(NULL);
     }
+    log_event("Car %d exited the ferry", id);
     cars_on_board--;
 
     if (cars_on_board == 0) {
-        if (sem_post(sem_empty) != 0)
+        if (sem_post(&sem_empty) != 0)
         {
             perror("sem_post(sem_empty)");
             pthread_mutex_unlock(&mutex);
@@ -117,10 +120,22 @@ void* car_thread(void *arg) {
 }
 
 void* car_generator_thread(void *arg) {
-    while (simulation_running && ferry_available)
+    while (simulation_running)
     {
-        ptheread_t tid;
-        int car = pthread_create(&tid, NULL, car_thread, arg);
+        if(ferry_available){
+        pthread_t tid;
+
+        // Allocating memory for car IDs
+        int *car_id = malloc(sizeof(int));
+        if (car_id == NULL)
+        {
+            perror("malloc");
+            continue;
+        }
+        *car_id = next_car_id++;
+
+        // Create car thread
+        int car = pthread_create(&tid, NULL, car_thread, car_id);
         if (car != 0)
         {
             perror("pthread_create");
@@ -136,23 +151,34 @@ void* car_generator_thread(void *arg) {
             perror("pthread_detach");
             continue;
         }
+        }   
     }
+    pthread_exit(NULL);
 }
 
 void* ferry_thread(void *arg) {
-    double elapsed;
     while (simulation_running)
     {
+        double elapsed = get_elapsed_time();
         if (elapsed >= SIMULATION_TIME)
         {
             simulation_running = false;
             break;
         }
 
+
         ferry_available = true;
+        // Allow cars to board (give tickets)
+        for (int i = 0; i < FERRY_CAPACITY; i++) {
+            if (sem_post(&sem_board) != 0)
+            {
+                perror("sem_post(sem_board)");
+                pthread_exit(NULL);
+            }
+        }
 
         // Wait until ferry is full
-        if (sem_wait(sem_full) != 0)
+        if (sem_wait(&sem_full) != 0)
         {
             perror("sem_wait(sem_full)");
             pthread_exit(NULL);
@@ -167,7 +193,7 @@ void* ferry_thread(void *arg) {
 
         // Allow cars to unboard
         for (int i = 0; i < FERRY_CAPACITY; i++) {
-            if (sem_post(sem_unboard) != 0)
+            if (sem_post(&sem_unboard) != 0)
             {
                 perror("sem_post(sem_unboard)");
                 pthread_exit(NULL);
@@ -175,7 +201,7 @@ void* ferry_thread(void *arg) {
         }
 
         // Wait until ferry is empty
-        if (sem_wait(sem_empty) != 0)
+        if (sem_wait(&sem_empty) != 0)
         {
             perror("sem_wait(sem_empty)");
             pthread_exit(NULL);
@@ -258,6 +284,6 @@ int main(void){
     // Destroy mutex
     pthread_mutex_destroy(&mutex);
 
-    return exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
 }
 
