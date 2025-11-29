@@ -142,8 +142,8 @@ void* car_generator_thread(void *arg) {
                 continue;
             }
 
-            // Random arrival time between 0.1 to 1 seconds
-            usleep((rand() % 1000) * 1000);
+            // Random arrival time between 0.001 to 1 seconds
+            usleep((rand() % 1000 + 1) * 1000);
 
             double elapsed = get_elapsed_time();
             if (elapsed >= SIMULATION_TIME)
@@ -196,7 +196,7 @@ void* ferry_thread(void *arg) {
 
         sleep(3); // Simulate crossing time
 
-        double elapsed = get_elapsed_time();
+        elapsed = get_elapsed_time();
         if (elapsed >= SIMULATION_TIME)
         {
             simulation_running = false;
