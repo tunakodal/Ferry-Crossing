@@ -37,6 +37,7 @@ double get_elapsed_time() {
     return (now.tv_sec - start_time.tv_sec) + (now.tv_usec - start_time.tv_usec) / 1000000.0;
 }
 
+// Logging function with "timestamp" 
 void log_event(const char *fmt, ...) {
     double elapsed = get_elapsed_time();
 
@@ -48,6 +49,7 @@ void log_event(const char *fmt, ...) {
     va_end(args);
     printf("\n");
 }
+
 
 void* car_thread(void *arg) {
     int id = *(int *)arg;
@@ -69,6 +71,7 @@ void* car_thread(void *arg) {
     log_event("Car %d entered the ferry", id);
     cars_on_board++;
 
+    // If ferry is full (last car entered), signal ferry to depart
     if (cars_on_board == FERRY_CAPACITY) {
         if (sem_post(&sem_full) != 0)
         {
@@ -84,6 +87,7 @@ void* car_thread(void *arg) {
         pthread_exit(NULL);
     }
 
+    // Wait for ferry to arrive at destination i.e. safe to unboard
     if (sem_wait(&sem_unboard) != 0)
     {
         perror("sem_wait(sem_unboard)");
@@ -100,6 +104,7 @@ void* car_thread(void *arg) {
     log_event("Car %d left the ferry", id);
     cars_on_board--;
 
+    // If ferry is empty (last car exited), signal ferry that it's empty
     if (cars_on_board == 0) {
         if (sem_post(&sem_empty) != 0)
         {
@@ -118,6 +123,7 @@ void* car_thread(void *arg) {
     pthread_exit(NULL);
 
 }
+
 
 void* car_generator_thread(void *arg) {
     while (simulation_running)
@@ -163,6 +169,7 @@ void* car_generator_thread(void *arg) {
     pthread_exit(NULL);
 }
 
+
 void* ferry_thread(void *arg) {
     while (simulation_running)
     {
@@ -196,6 +203,7 @@ void* ferry_thread(void *arg) {
 
         sleep(3); // Simulate crossing time
 
+        // Check simulation time before unboarding
         elapsed = get_elapsed_time();
         if (elapsed >= SIMULATION_TIME)
         {
